@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ExternalLink, Loader2, MapPin } from "lucide-react";
 
 import { useDisaster } from "@/context/DisasterContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 function statusBadgeClass(status: string) {
   switch (status) {
@@ -19,6 +20,25 @@ function statusBadgeClass(status: string) {
       return "bg-gray-500/15 text-gray-300 ring-gray-500/30";
     default:
       return "bg-white/10 text-gray-200 ring-white/15";
+  }
+}
+
+function statusBadgeLabel(
+  status: string,
+  t: (k: import("@/context/LanguageContext").TranslationKey) => string
+) {
+  switch (status) {
+    case "AVAILABLE":
+      return t("available");
+    case "OVERCROWDED":
+      return t("overcrowded");
+    case "DAMAGED":
+      return t("damaged");
+    case "INACCESSIBLE":
+    case "EVACUATING":
+      return t("warning");
+    default:
+      return status;
   }
 }
 
@@ -39,6 +59,7 @@ function pickRouteSuggestion(mapAlerts: readonly string[]) {
 
 export default function MapPage() {
   const { disaster } = useDisaster();
+  const { t } = useLanguage();
 
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
   const defaultQuery = "hospitals near Srinagar Kashmir";
@@ -90,22 +111,22 @@ export default function MapPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="flex flex-1 flex-col bg-black"
+      className="flex flex-1 flex-col bg-[#0f2027]"
     >
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Map</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">{t("map")}</h1>
+          <p className="mt-1 text-sm text-[#7aa8b8]">
             Hospital access and routing view —{" "}
-            <span className="text-gray-200 font-semibold">{disaster.name}</span>
+            <span className="text-white font-semibold">{disaster.name}</span>
           </p>
         </div>
 
-        <section className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 overflow-hidden">
+        <section className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 overflow-hidden">
           <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/10">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-white">Nearby hospitals</div>
-              <div className="text-xs text-gray-500 truncate">
+              <div className="text-xs text-[#4a7a8a] truncate">
                 Embedded search via Google Maps (iframe)
               </div>
             </div>
@@ -124,7 +145,7 @@ export default function MapPage() {
               ) : (
                 <>
                   <MapPin className="h-4 w-4" aria-hidden="true" />
-                  Find Hospitals Near Me
+                  {t("findHospitals")}
                 </>
               )}
             </button>
@@ -144,7 +165,7 @@ export default function MapPage() {
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-xl overflow-hidden ring-1 ring-white/10 bg-black/30">
+            <div className="mt-4 rounded-xl overflow-hidden ring-1 ring-white/10 bg-[#162d3a]">
               {key ? (
                 <iframe
                   src={iframeSrc}
@@ -157,7 +178,7 @@ export default function MapPage() {
                   title="Hospital map"
                 />
               ) : (
-                <div className="h-[400px] flex items-center justify-center text-sm text-gray-500">
+                <div className="h-[400px] flex items-center justify-center text-sm text-[#4a7a8a]">
                   Map disabled (missing key).
                 </div>
               )}
@@ -167,20 +188,21 @@ export default function MapPage() {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-white">Hospitals</h2>
-            <span className="text-xs text-gray-500">From current disaster config</span>
+            <h2 className="text-lg font-semibold text-white">{t("hospitals")}</h2>
+            <span className="text-xs text-[#4a7a8a]">{t("fromConfig")}</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {disaster.hospitals.map((h, idx) => (
               <div
                 key={`${h.name}-${idx}`}
-                className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-4 flex items-start justify-between gap-4"
+                className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-4 flex items-start justify-between gap-4"
               >
                 <div className="min-w-0">
                   <div className="text-white font-semibold truncate">{h.name}</div>
-                  <div className="mt-1 text-sm text-gray-400">
-                    {h.distance} <span className="text-gray-600">•</span> ETA {h.eta}
+                  <div className="mt-1 text-sm text-[#7aa8b8]">
+                    {h.distance.replace(/\bkm\b/i, t("km"))} <span className="text-[#4a7a8a]">•</span>{" "}
+                    {t("eta")} {h.eta}
                   </div>
                   <div className="mt-3">
                     <span
@@ -189,7 +211,7 @@ export default function MapPage() {
                         statusBadgeClass(h.status),
                       ].join(" ")}
                     >
-                      {h.status}
+                      {statusBadgeLabel(h.status, t)}
                     </span>
                   </div>
                 </div>
@@ -201,7 +223,7 @@ export default function MapPage() {
                   className="shrink-0 inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ring-1 ring-white/10 px-3 py-2 text-sm font-semibold text-white"
                 >
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                  Get Directions
+                  {t("getDirections")}
                 </a>
               </div>
             ))}
@@ -209,11 +231,11 @@ export default function MapPage() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-5">
+          <div className="lg:col-span-2 rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-white">Smart Routing</h2>
-                <p className="mt-1 text-sm text-gray-400">
+                <h2 className="text-lg font-semibold text-white">{t("smartRouting")}</h2>
+                <p className="mt-1 text-sm text-[#7aa8b8]">
                   AI has rerouted ambulances avoiding:{" "}
                   <span className="text-gray-200 font-semibold">
                     {(disaster.blockedRoutes as readonly string[]).join(", ")}
@@ -225,13 +247,13 @@ export default function MapPage() {
             <div className="mt-4 rounded-lg bg-white/5 ring-1 ring-white/10 p-4">
               <div className="text-sm font-semibold text-white">Clear route suggestion</div>
               <p className="mt-2 text-sm text-gray-200">{routeSuggestion}</p>
-              <div className="mt-3 text-xs text-gray-500">
+              <div className="mt-3 text-xs text-[#4a7a8a]">
                 Signals from map alerts: {(disaster.mapAlerts as readonly string[]).join(" • ")}
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-5">
+          <div className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-5">
             <h2 className="text-lg font-semibold text-white">Map Legend</h2>
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex items-center gap-3 text-gray-200">

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Loader2, Upload } from "lucide-react";
 
 import { useDisaster } from "@/context/DisasterContext";
+import { useLanguage } from "@/context/LanguageContext";
 import type { DisasterType } from "@/data/disasters";
 
 type SosReport = {
@@ -27,6 +28,15 @@ type SuccessState = {
 };
 
 const STORAGE_KEY = "reliefai:sosReports";
+const SOS_FEED_KEY = "sos_reports";
+const SOS_FEED_UPDATED_EVENT = "sos_reports_updated";
+
+type SosFeedAlert = {
+  msg: string;
+  priority: "HIGH";
+  time: "Just now";
+  isNew: true;
+};
 
 function parseDistanceKm(distance: string): number | null {
   const match = /(\d+(\.\d+)?)\s*km/i.exec(distance);
@@ -72,8 +82,38 @@ function safeWriteReports(next: SosReport[]) {
   }
 }
 
+function safeReadSosFeed(): SosFeedAlert[] {
+  try {
+    const raw = localStorage.getItem(SOS_FEED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is SosFeedAlert => {
+      if (!x || typeof x !== "object") return false;
+      const a = x as Partial<SosFeedAlert>;
+      return (
+        typeof a.msg === "string" &&
+        a.priority === "HIGH" &&
+        a.time === "Just now" &&
+        a.isNew === true
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function safeWriteSosFeed(next: SosFeedAlert[]) {
+  try {
+    localStorage.setItem(SOS_FEED_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export default function SosPage() {
   const { disaster, disasterType } = useDisaster();
+  const { t } = useLanguage();
 
   const emergencyOptions = useMemo(
     () => disaster.triageInjuries as readonly string[],
@@ -122,6 +162,16 @@ export default function SosPage() {
     const prev = safeReadReports();
     safeWriteReports([report, ...prev]);
 
+    const nextAlert: SosFeedAlert = {
+      msg: `${selectedEmergencyType} at ${location.trim()} — ${name.trim()}`,
+      priority: "HIGH",
+      time: "Just now",
+      isNew: true,
+    };
+    const prevFeed = safeReadSosFeed();
+    safeWriteSosFeed([nextAlert, ...prevFeed]);
+    window.dispatchEvent(new Event(SOS_FEED_UPDATED_EVENT));
+
     const nearest = pickNearestHospital(disaster.hospitals);
     setSuccess({ reference, ...nearest });
     setSubmitting(false);
@@ -134,13 +184,13 @@ export default function SosPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="flex flex-1 flex-col bg-black"
+      className="flex flex-1 flex-col bg-[#0f2027]"
     >
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Send SOS</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Report an emergency for <span className="text-gray-200 font-semibold">{disaster.name}</span>.
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">{t("sendSOS")}</h1>
+          <p className="mt-1 text-sm text-[#7aa8b8]">
+            Report an emergency for <span className="text-white font-semibold">{disaster.name}</span>.
           </p>
         </div>
 
@@ -149,7 +199,7 @@ export default function SosPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-5"
+            className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-5"
           >
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 flex items-center justify-center">
@@ -166,7 +216,7 @@ export default function SosPage() {
                   <div className="text-sm font-semibold text-white">Estimated response time</div>
                   <div className="mt-1 text-sm text-gray-300">
                     Nearest hospital: <span className="text-gray-100 font-semibold">{success.hospitalName}</span>
-                    <span className="text-gray-500"> • </span>
+                    <span className="text-[#4a7a8a]"> • </span>
                     ETA <span className="text-gray-100 font-semibold">{success.eta}</span>
                   </div>
                 </div>
@@ -179,45 +229,45 @@ export default function SosPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
             onSubmit={onSubmit}
-            className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-5 space-y-4"
+            className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-5 space-y-4"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="grid gap-2">
-                <span className="text-sm font-semibold text-gray-200">Name</span>
+                <span className="text-sm font-semibold text-white">{t("name")}</span>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   disabled={disabled}
                   required
-                  className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                  placeholder="Your name"
+                  className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                  placeholder={t("name")}
                 />
               </label>
 
               <label className="grid gap-2">
-                <span className="text-sm font-semibold text-gray-200">Location</span>
+                <span className="text-sm font-semibold text-white">{t("location")}</span>
                 <input
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   disabled={disabled}
                   required
-                  className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                  placeholder="e.g. Near Lal Chowk, Rajbagh"
+                  className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                  placeholder={t("location")}
                 />
               </label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="grid gap-2">
-                <span className="text-sm font-semibold text-gray-200">Emergency type</span>
+                <span className="text-sm font-semibold text-white">{t("emergencyType")}</span>
                 <select
                   value={selectedEmergencyType}
                   onChange={(e) => setEmergencyType(e.target.value)}
                   disabled={disabled}
-                  className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-600/60"
+                  className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
                 >
                   {emergencyOptions.map((opt) => (
-                    <option key={opt} value={opt} className="bg-black">
+                    <option key={opt} value={opt} className="bg-[#162d3a]">
                       {opt}
                     </option>
                   ))}
@@ -225,7 +275,7 @@ export default function SosPage() {
               </label>
 
               <label className="grid gap-2">
-                <span className="text-sm font-semibold text-gray-200">Number of people affected</span>
+                <span className="text-sm font-semibold text-white">{t("peopleAffected")}</span>
                 <input
                   type="number"
                   min={1}
@@ -233,14 +283,14 @@ export default function SosPage() {
                   onChange={(e) => setPeopleAffected(Number(e.target.value))}
                   disabled={disabled}
                   required
-                  className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
+                  className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
                 />
               </label>
             </div>
 
             <div className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Are you trapped?</span>
-              <div className="inline-flex rounded-lg bg-black/40 ring-1 ring-white/10 p-1 w-fit">
+              <span className="text-sm font-semibold text-white">{t("trapped")}</span>
+              <div className="inline-flex rounded-lg bg-[#162d3a] ring-1 ring-white/10 p-1 w-fit">
                 <button
                   type="button"
                   onClick={() => setTrapped(false)}
@@ -250,7 +300,7 @@ export default function SosPage() {
                     trapped ? "text-gray-300 hover:bg-white/5" : "bg-white/10 text-white",
                   ].join(" ")}
                 >
-                  No
+                  {t("no")}
                 </button>
                 <button
                   type="button"
@@ -258,36 +308,36 @@ export default function SosPage() {
                   disabled={disabled}
                   className={[
                     "px-4 py-2 rounded-md text-sm font-semibold transition-colors",
-                    trapped ? "bg-red-600/30 text-white" : "text-gray-300 hover:bg-white/5",
+                    trapped ? "bg-[#0d9488]/35 text-white" : "text-gray-300 hover:bg-white/5",
                   ].join(" ")}
                 >
-                  Yes
+                  {t("yes")}
                 </button>
               </div>
             </div>
 
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Description</span>
+              <span className="text-sm font-semibold text-white">{t("description")}</span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={disabled}
                 rows={4}
-                className="rounded-lg bg-black/40 ring-1 ring-white/10 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                placeholder="Describe the situation, injuries, and immediate needs..."
+                className="rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 py-2 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                placeholder={t("description")}
               />
             </label>
 
             <div className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Photo upload</span>
-              <label className="flex items-center justify-between gap-3 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 py-3 cursor-pointer hover:bg-white/5 transition-colors">
+              <span className="text-sm font-semibold text-white">{t("photoUpload")}</span>
+              <label className="flex items-center justify-between gap-3 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 py-3 cursor-pointer hover:bg-white/5 transition-colors">
                 <div className="min-w-0">
                   <div className="text-sm text-white font-semibold flex items-center gap-2">
                     <Upload className="h-4 w-4 text-gray-300" aria-hidden="true" />
-                    Upload photo
+                    {t("photoUpload")}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {photoFilename ? photoFilename : "UI only — no backend upload yet"}
+                  <div className="text-xs text-[#4a7a8a] truncate">
+                    {photoFilename ? photoFilename : t("photoUpload")}
                   </div>
                 </div>
                 <input
@@ -306,7 +356,7 @@ export default function SosPage() {
             <button
               type="submit"
               disabled={disabled || !name.trim() || !location.trim() || !emergencyType}
-              className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-500 transition-colors text-white font-extrabold tracking-wide ring-1 ring-red-500/30 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-xl bg-[#0d9488] hover:bg-[#2dd4bf] transition-colors text-white font-extrabold tracking-wide ring-1 ring-[#0d9488]/30 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
@@ -314,7 +364,7 @@ export default function SosPage() {
                   Sending…
                 </>
               ) : (
-                "SEND SOS"
+                t("sendSOSBtn")
               )}
             </button>
           </motion.form>

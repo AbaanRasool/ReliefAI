@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Loader2, Send } from "lucide-react";
+import { AlertTriangle, Loader2, Send, Volume2 } from "lucide-react";
 
 import { useDisaster } from "@/context/DisasterContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 type TriagePriority = "CRITICAL" | "HIGH" | "MEDIUM" | "STABLE";
 
@@ -29,6 +30,41 @@ function priorityBadgeClass(priority: TriagePriority) {
       return "bg-yellow-400 text-black ring-yellow-300/40";
     case "STABLE":
       return "bg-emerald-500 text-black ring-emerald-400/40";
+  }
+}
+
+function voiceAlertMessage(priority: TriagePriority) {
+  switch (priority) {
+    case "CRITICAL":
+      return (
+        "Warning. Critical patient detected. " +
+        "Immediate medical attention required. " +
+        "Rescue team and ambulance have been notified."
+      );
+    case "HIGH":
+      return "High priority patient. Medical assistance needed urgently.";
+    case "MEDIUM":
+      return "Medium priority patient. Stable but requires medical attention.";
+    case "STABLE":
+      return "Patient is stable. Monitor and provide basic first aid.";
+  }
+}
+
+function speakVoiceAlert(message: string) {
+  if (typeof window === "undefined") return false;
+  if (!("speechSynthesis" in window)) return false;
+  if (typeof window.SpeechSynthesisUtterance === "undefined") return false;
+
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -57,6 +93,7 @@ function pickNearestAvailableHospital(
 
 export default function TriagePage() {
   const { disaster, disasterType } = useDisaster();
+  const { t } = useLanguage();
 
   const injuryOptions = useMemo(
     () => disaster.triageInjuries as readonly string[],
@@ -78,6 +115,8 @@ export default function TriagePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TriageResult | null>(null);
   const [modal, setModal] = useState<AlertModalState>({ open: false, hospitalName: null });
+
+  const lastSpokenAtRef = useRef<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -129,6 +168,17 @@ export default function TriagePage() {
 
   const disabled = loading;
 
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+  const message = result ? voiceAlertMessage(result.priority) : null;
+
+  useEffect(() => {
+    if (!result) return;
+    const stamp = `${result.priority}|${result.reason}`;
+    if (stamp === lastSpokenAtRef.current) return;
+    lastSpokenAtRef.current = stamp;
+    speakVoiceAlert(voiceAlertMessage(result.priority));
+  }, [result]);
+
   const nearestHospital = useMemo(
     () => pickNearestAvailableHospital(disaster.hospitals),
     [disaster.hospitals]
@@ -139,12 +189,12 @@ export default function TriagePage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="flex flex-1 flex-col bg-black"
+      className="flex flex-1 flex-col bg-[#0f2027]"
     >
       <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">AI Triage</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">{t("aiTriage")}</h1>
+          <p className="mt-1 text-sm text-[#7aa8b8]">
             Grok-powered triage guidance for <span className="text-gray-200 font-semibold">{disaster.name}</span>.
           </p>
         </div>
@@ -154,23 +204,23 @@ export default function TriagePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           onSubmit={onSubmit}
-          className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 p-5 space-y-4"
+          className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 p-5 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Patient name</span>
+              <span className="text-sm font-semibold text-white">{t("patientName")}</span>
               <input
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
                 disabled={disabled}
                 required
-                className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                placeholder="Full name"
+                className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                placeholder={t("patientName")}
               />
             </label>
 
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Age</span>
+              <span className="text-sm font-semibold text-white">{t("age")}</span>
               <input
                 type="number"
                 min={0}
@@ -178,21 +228,21 @@ export default function TriagePage() {
                 onChange={(e) => setAge(Number(e.target.value))}
                 disabled={disabled}
                 required
-                className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
+                className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
               />
             </label>
           </div>
 
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-gray-200">Injury type</span>
+            <span className="text-sm font-semibold text-white">{t("injuryType")}</span>
             <select
               value={selectedInjuryType}
               onChange={(e) => setInjuryType(e.target.value)}
               disabled={disabled}
-              className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-600/60"
+              className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
             >
               {injuryOptions.map((opt) => (
-                <option key={opt} value={opt} className="bg-black">
+                <option key={opt} value={opt} className="bg-[#162d3a]">
                   {opt}
                 </option>
               ))}
@@ -200,15 +250,15 @@ export default function TriagePage() {
           </label>
 
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-gray-200">Symptoms</span>
+            <span className="text-sm font-semibold text-white">{t("symptoms")}</span>
             <textarea
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
               disabled={disabled}
               rows={6}
               required
-              className="rounded-lg bg-black/40 ring-1 ring-white/10 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-              placeholder="Describe symptoms in detail (pain, bleeding, consciousness, breathing, mobility, etc.)"
+              className="rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 py-2 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+              placeholder={t("symptoms")}
             />
           </label>
 
@@ -220,9 +270,9 @@ export default function TriagePage() {
                   checked={trappedUnderDebris}
                   onChange={(e) => setTrappedUnderDebris(e.target.checked)}
                   disabled={disabled}
-                  className="h-4 w-4 accent-red-600"
+                  className="h-4 w-4 accent-[#0d9488]"
                 />
-                <span className="text-sm text-gray-200 font-semibold">Trapped under debris</span>
+                <span className="text-sm text-white font-semibold">{t("trappedDebris")}</span>
               </label>
             ) : null}
 
@@ -232,34 +282,34 @@ export default function TriagePage() {
                 checked={unstableStructureNearby}
                 onChange={(e) => setUnstableStructureNearby(e.target.checked)}
                 disabled={disabled}
-                className="h-4 w-4 accent-red-600"
+                className="h-4 w-4 accent-[#0d9488]"
               />
-              <span className="text-sm text-gray-200 font-semibold">Unstable structure nearby</span>
+              <span className="text-sm text-white font-semibold">{t("unstableStructure")}</span>
             </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Blood Pressure (optional)</span>
+              <span className="text-sm font-semibold text-white">{t("bloodPressure")}</span>
               <input
                 value={bloodPressure}
                 onChange={(e) => setBloodPressure(e.target.value)}
                 disabled={disabled}
-                className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                placeholder="e.g. 120/80"
+                className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                placeholder={t("bloodPressure")}
               />
             </label>
 
             <label className="grid gap-2">
-              <span className="text-sm font-semibold text-gray-200">Pulse (optional)</span>
+              <span className="text-sm font-semibold text-white">{t("pulse")}</span>
               <input
                 type="number"
                 min={0}
                 value={pulse}
                 onChange={(e) => setPulse(e.target.value)}
                 disabled={disabled}
-                className="h-11 rounded-lg bg-black/40 ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-600/60"
-                placeholder="e.g. 96"
+                className="h-11 rounded-lg bg-[#162d3a] ring-1 ring-white/10 px-3 text-sm text-white placeholder:text-[#4a7a8a] focus:outline-none focus:ring-2 focus:ring-[#0d9488]/60"
+                placeholder={t("pulse")}
               />
             </label>
           </div>
@@ -273,17 +323,17 @@ export default function TriagePage() {
           <button
             type="submit"
             disabled={disabled || !patientName.trim() || !symptoms.trim() || !selectedInjuryType}
-            className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-500 transition-colors text-white font-extrabold tracking-wide ring-1 ring-red-500/30 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-xl bg-[#0d9488] hover:bg-[#2dd4bf] transition-colors text-white font-extrabold tracking-wide ring-1 ring-[#0d9488]/30 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                Grok is thinking…
+                {t("aiTriage")}
               </>
             ) : (
               <>
                 <Send className="h-5 w-5" aria-hidden="true" />
-                Run Triage
+                {t("runTiageBtn")}
               </>
             )}
           </button>
@@ -294,11 +344,11 @@ export default function TriagePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="rounded-xl bg-gray-950/70 ring-1 ring-white/10 overflow-hidden"
+            className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 overflow-hidden"
           >
             <div className="px-5 py-5 flex items-start justify-between gap-4 border-b border-white/10">
               <div className="min-w-0">
-                <div className="text-xs uppercase tracking-wide text-gray-400">Triage result</div>
+                <div className="text-xs uppercase tracking-wide text-[#4a7a8a]">Triage result</div>
                 <div className="mt-2 flex items-center gap-3">
                   <div
                     className={[
@@ -308,6 +358,18 @@ export default function TriagePage() {
                   >
                     {result.priority}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (message) speakVoiceAlert(message);
+                    }}
+                    disabled={!canSpeak || !message}
+                    className="inline-flex items-center justify-center h-10 w-10 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ring-1 ring-white/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                    aria-label="Replay voice alert"
+                    title={canSpeak ? "Replay voice alert" : "Voice alerts not supported"}
+                  >
+                    <Volume2 className="h-5 w-5 text-white" aria-hidden="true" />
+                  </button>
                   <div className="text-sm text-gray-300">
                     {result.hospital_needed ? "Hospital evaluation recommended." : "Hospital may not be required."}
                   </div>
@@ -351,7 +413,7 @@ export default function TriagePage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-[#4a7a8a]">
                   Rescue needed: <span className="text-gray-300 font-semibold">{String(result.rescue_needed)}</span>
                   <span className="text-gray-600"> • </span>
                   Hospital needed:{" "}
@@ -385,7 +447,7 @@ export default function TriagePage() {
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="rounded-xl bg-gray-950 ring-1 ring-white/10 shadow-xl p-5"
+              className="rounded-xl bg-[#1a3a4a] ring-1 ring-white/10 shadow-xl p-5"
             >
               <div className="text-lg font-bold text-white">Hospital Alert</div>
               <p className="mt-2 text-sm text-gray-300">
